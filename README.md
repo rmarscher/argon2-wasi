@@ -12,7 +12,8 @@ Simple example:
 
 ```ts
 import { WASI } from "@cloudflare/workers-wasi";
-import argon2 from './argon2-wasi.wasm';
+// @ts-ignore TS2307: Cannot find module './argon2-wasi.wasm'
+import argon2 from "./argon2-wasi.wasm";
 
 export async function invoke(args: string[]) {
   const stdout = new TransformStream();
@@ -25,15 +26,15 @@ export async function invoke(args: string[]) {
   const instance = new WebAssembly.Instance(argon2, {
     wasi_snapshot_preview1: wasi.wasiImport,
   });
-  await wasi.start(instance);
-  const errors = await stderr.readable.getReader().read();
-  const errorsValue = new TextDecoder().decode(errors.value);
+  const promise = wasi.start(instance);
+  const errors = stderr.readable.getReader().read();
+  const ret = stdout.readable.getReader().read();
+  const [errorsStream, resultStream, _] = await Promise.all([errors, ret, promise]);
+  const errorsValue = new TextDecoder().decode(errorsStream.value);
   if (errorsValue) {
-    console.error('[invoke] stderr: ', errorsValue);
     throw new Error(errorsValue);
   }
-  const ret = await stdout.readable.getReader().read();
-  const retValue = new TextDecoder().decode(ret.value);
+  const retValue = new TextDecoder().decode(resultStream.value);
   return retValue.trim();
 }
 
@@ -42,7 +43,7 @@ export async function argon2Hash(password: string): Promise<string> {
 }
 
 export async function argon2Verify(password: string, hash: string): Promise<boolean> {
-  return await invoke(["verify", password, hash]) === "true";
+  return (await invoke(["verify", password, hash])) === "true";
 }
 ```
 
